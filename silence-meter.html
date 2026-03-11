@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Silence Meter</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f2eb;
+  --surface: #efebe0;
+  --ink: #1a1712;
+  --ink2: #4a4640;
+  --ink3: #9a9488;
+  --rule: rgba(26,23,18,0.1);
+  --red: #c0392b;
+  --green: #2d6a4f;
+  --amber: #b7620a;
+  --accent: #1a1712;
+  --score-bg: #1a1712;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'DM Mono', monospace;
+  font-weight: 300;
+  min-height: 100vh;
+  cursor: none;
+  overflow-x: hidden;
+}
+
+/* Grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9990;
+}
+
+/* Cursor */
+#cur { position: fixed; width: 8px; height: 8px; background: var(--ink); border-radius: 50%; pointer-events: none; z-index: 9999; transform: translate(-50%,-50%); transition: transform .15s, background .2s; }
+#cur.hover { transform: translate(-50%,-50%) scale(0); }
+#cur-ring { position: fixed; width: 32px; height: 32px; border: 1px solid var(--ink); border-radius: 50%; pointer-events: none; z-index: 9998; transform: translate(-50%,-50%); transition: all .25s cubic-bezier(.25,.46,.45,.94); }
+#cur-ring.hover { width: 48px; height: 48px; border-color: var(--red); }
+
+/* Layout */
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 40px; }
+
+/* Header */
+header {
+  padding: 52px 0 48px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 64px;
+}
+.header-inner { display: flex; justify-content: space-between; align-items: flex-end; }
+
+.logo-block {}
+.logo-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 10px;
+}
+.logo-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(38px, 5vw, 58px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.logo-name em {
+  font-style: italic;
+  color: var(--ink2);
+}
+
+.header-right {
+  text-align: right;
+  max-width: 260px;
+}
+.header-tagline {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ink3);
+  letter-spacing: 0.02em;
+}
+.rams-credit {
+  font-size: 10px;
+  color: var(--ink3);
+  margin-top: 8px;
+  opacity: 0.6;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Input zone */
+.input-zone {
+  margin-bottom: 72px;
+}
+
+.input-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.input-row {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--ink);
+}
+
+#url-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--ink);
+  padding: 18px 24px;
+  outline: none;
+  letter-spacing: 0.01em;
+}
+#url-input::placeholder { color: var(--ink3); opacity: 0.5; }
+
+#analyse-btn {
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 18px 32px;
+  cursor: none;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#analyse-btn:hover { background: #2d2a24; }
+#analyse-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Example URLs */
+.examples {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ex-label { font-size: 10px; color: var(--ink3); letter-spacing: 0.1em; text-transform: uppercase; }
+.ex-pill {
+  font-size: 11px;
+  color: var(--ink2);
+  border: 1px solid var(--rule);
+  padding: 4px 12px;
+  border-radius: 2px;
+  cursor: none;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+.ex-pill:hover { border-color: var(--ink); color: var(--ink); background: rgba(26,23,18,0.04); }
+
+/* Score display */
+#results { display: none; }
+#results.visible { display: block; animation: fadeUp 0.6s ease; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Score hero */
+.score-hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 48px;
+  align-items: center;
+  padding: 48px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 64px;
+}
+
+.score-numblock {
+  position: relative;
+}
+.score-num {
+  font-family: 'DM Serif Display', serif;
+  font-size: 120px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  transition: color 0.6s ease;
+}
+.score-num.bad { color: var(--red); }
+.score-num.mid { color: var(--amber); }
+.score-num.good { color: var(--green); }
+
+.score-denom {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--ink3);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.score-verdict {
+  max-width: 400px;
+}
+.score-site-name {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 12px;
+}
+.score-headline {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: 16px;
+}
+.score-summary {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink2);
+}
+
+.noise-bar-block {}
+.noise-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 12px;
+  text-align: right;
+}
+.noise-bar-outer {
+  width: 12px;
+  height: 200px;
+  background: var(--rule);
+  position: relative;
+  margin-left: auto;
+}
+.noise-bar-fill {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--ink);
+  transition: height 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  height: 0%;
+}
+.noise-bar-fill.bad { background: var(--red); }
+.noise-bar-fill.mid { background: var(--amber); }
+.noise-bar-fill.good { background: var(--green); }
+
+/* Principles grid */
+.principles-section { margin-bottom: 64px; }
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.section-title {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.section-meta { font-size: 11px; color: var(--ink3); }
+
+.principles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.principle-card {
+  background: var(--bg);
+  padding: 28px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.principle-card.show { opacity: 1; transform: translateY(0); }
+
+.p-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+
+.p-num {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink3);
+}
+
+.p-score-pip {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.pip {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--rule);
+  transition: background 0.3s ease;
+}
+.pip.fill-red { background: var(--red); }
+.pip.fill-amber { background: var(--amber); }
+.pip.fill-green { background: var(--green); }
+
+.p-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 16px;
+  line-height: 1.2;
+  color: var(--ink);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.p-verdict {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ink2);
+  margin-bottom: 12px;
+}
+
+.p-ram-quote {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ink3);
+  border-left: 2px solid var(--rule);
+  padding-left: 10px;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+.p-score-label {
+  margin-top: 14px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  display: inline-block;
+}
+.p-score-label.fail { background: rgba(192,57,43,0.1); color: var(--red); }
+.p-score-label.warn { background: rgba(183,98,10,0.1); color: var(--amber); }
+.p-score-label.pass { background: rgba(45,106,79,0.1); color: var(--green); }
+
+/* Redesign section */
+.redesign-section { margin-bottom: 80px; }
+
+.redesign-card {
+  border: 1px solid var(--ink);
+  padding: 40px;
+  position: relative;
+  background: var(--surface);
+}
+
+.redesign-tag {
+  position: absolute;
+  top: -1px; right: 40px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+}
+
+.redesign-hero {
+  margin-top: 8px;
+}
+
+.redesign-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 24px;
+}
+
+#redesign-output {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--ink2);
+  white-space: pre-wrap;
+  font-family: 'DM Mono', monospace;
+}
+
+/* The actual rendered redesign concept */
+#hero-concept {
+  margin-top: 32px;
+  border-top: 1px solid var(--rule);
+  padding-top: 32px;
+}
+
+.concept-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 20px;
+}
+
+#hero-render {
+  min-height: 280px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+
+/* Loading */
+#loading {
+  display: none;
+  padding: 80px 0;
+  text-align: center;
+}
+#loading.visible { display: block; }
+
+.loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.loading-score {
+  font-family: 'DM Serif Display', serif;
+  font-size: 80px;
+  color: var(--rule);
+  animation: countUp 2s ease forwards;
+  letter-spacing: -0.04em;
+}
+
+@keyframes countUp {
+  from { color: var(--rule); }
+  to { color: var(--ink3); }
+}
+
+.loading-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 300px;
+}
+
+.loading-line {
+  height: 1px;
+  background: var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-line::after {
+  content: '';
+  position: absolute;
+  left: -100%;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--ink3);
+  animation: scan 1.5s ease-in-out infinite;
+}
+
+.loading-line:nth-child(2)::after { animation-delay: 0.2s; }
+.loading-line:nth-child(3)::after { animation-delay: 0.4s; }
+
+@keyframes scan { from { left: -100%; } to { left: 100%; } }
+
+.loading-text {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+/* Principles reference */
+.reference-section {
+  border-top: 1px solid var(--rule);
+  padding-top: 40px;
+  margin-bottom: 80px;
+}
+
+.ref-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.ref-item {}
+.ref-num { font-size: 9px; letter-spacing: 0.15em; color: var(--ink3); margin-bottom: 4px; }
+.ref-name { font-size: 11px; color: var(--ink2); line-height: 1.4; }
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 32px 0 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ft { font-size: 10px; letter-spacing: 0.15em; color: var(--ink3); text-transform: uppercase; }
+
+/* Streaming cursor blink */
+.stream-cursor::after {
+  content: '▊';
+  animation: blink 0.8s step-end infinite;
+  color: var(--ink3);
+  font-size: 13px;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div id="cur"></div>
+<div id="cur-ring"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo-block">
+        <div class="logo-eyebrow">A designer's critique tool</div>
+        <div class="logo-name">The <em>Silence</em><br>Meter</div>
+      </div>
+      <div class="header-right">
+        <div class="header-tagline">Measures visual noise against Dieter Rams' 10 principles of good design. Less, but better.</div>
+        <div class="rams-credit">After Dieter Rams, 1976</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Input -->
+  <div class="input-zone">
+    <span class="input-label">Enter any website URL</span>
+    <div class="input-row">
+      <input type="text" id="url-input" placeholder="https://example.com" autocomplete="off" spellcheck="false">
+      <button id="analyse-btn" onclick="analyse()">Analyse →</button>
+    </div>
+    <div class="examples">
+      <span class="ex-label">Try →</span>
+      <span class="ex-pill" onclick="setUrl('https://www.amazon.com')">amazon.com</span>
+      <span class="ex-pill" onclick="setUrl('https://www.apple.com')">apple.com</span>
+      <span class="ex-pill" onclick="setUrl('https://www.notion.so')">notion.so</span>
+      <span class="ex-pill" onclick="setUrl('https://www.airbnb.com')">airbnb.com</span>
+      <span class="ex-pill" onclick="setUrl('https://www.stripe.com')">stripe.com</span>
+      <span class="ex-pill" onclick="setUrl('https://www.booking.com')">booking.com</span>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="loading-inner">
+      <div class="loading-score" id="loading-num">—</div>
+      <div class="loading-lines">
+        <div class="loading-line"></div>
+        <div class="loading-line"></div>
+        <div class="loading-line"></div>
+      </div>
+      <div class="loading-text" id="loading-msg">Scanning for noise…</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <!-- Score Hero -->
+    <div class="score-hero">
+      <div class="score-numblock">
+        <div class="score-num" id="score-num">—</div>
+        <div class="score-denom">out of 100</div>
+      </div>
+
+      <div class="score-verdict">
+        <div class="score-site-name" id="score-site"></div>
+        <div class="score-headline" id="score-headline"></div>
+        <div class="score-summary" id="score-summary"></div>
+      </div>
+
+      <div class="noise-bar-block">
+        <div class="noise-label">Noise<br>Level</div>
+        <div class="noise-bar-outer">
+          <div class="noise-bar-fill" id="noise-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10 Principles -->
+    <div class="principles-section">
+      <div class="section-header">
+        <div class="section-title">10 Principles of Good Design</div>
+        <div class="section-meta" id="pass-count">— passing</div>
+      </div>
+      <div class="principles-grid" id="principles-grid"></div>
+    </div>
+
+    <!-- Redesign -->
+    <div class="redesign-section">
+      <div class="section-header">
+        <div class="section-title">Rams Redesign</div>
+        <div class="section-meta">Hero section reimagined</div>
+      </div>
+      <div class="redesign-card">
+        <div class="redesign-tag">AI Concept</div>
+        <div class="redesign-hero">
+          <div class="redesign-label">How Dieter Rams would redesign the hero</div>
+          <div id="redesign-output"></div>
+          <div id="hero-concept">
+            <div class="concept-label">Rendered Concept</div>
+            <div id="hero-render"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rams Reference -->
+    <div class="reference-section">
+      <div class="section-header">
+        <div class="section-title">The 10 Principles</div>
+        <div class="section-meta">Dieter Rams, 1976</div>
+      </div>
+      <div class="ref-grid">
+        <div class="ref-item"><div class="ref-num">01</div><div class="ref-name">Good design is innovative</div></div>
+        <div class="ref-item"><div class="ref-num">02</div><div class="ref-name">Makes a product useful</div></div>
+        <div class="ref-item"><div class="ref-num">03</div><div class="ref-name">Is aesthetic</div></div>
+        <div class="ref-item"><div class="ref-num">04</div><div class="ref-name">Makes a product understandable</div></div>
+        <div class="ref-item"><div class="ref-num">05</div><div class="ref-name">Is unobtrusive</div></div>
+        <div class="ref-item"><div class="ref-num">06</div><div class="ref-name">Is honest</div></div>
+        <div class="ref-item"><div class="ref-num">07</div><div class="ref-name">Is long-lasting</div></div>
+        <div class="ref-item"><div class="ref-num">08</div><div class="ref-name">Thorough to last detail</div></div>
+        <div class="ref-item"><div class="ref-num">09</div><div class="ref-name">Is environmentally friendly</div></div>
+        <div class="ref-item"><div class="ref-num">10</div><div class="ref-name">As little design as possible</div></div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+
+  <footer>
+    <div class="ft">The Silence Meter</div>
+    <div class="ft">Less, but better — D. Rams</div>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+// ── CURSOR ──────────────────────────────────────
+const cur = document.getElementById('cur');
+const ring = document.getElementById('cur-ring');
+let rx = 0, ry = 0, mx = 0, my = 0;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cur.style.left = mx + 'px'; cur.style.top = my + 'px';
+});
+
+function animRing() {
+  rx += (mx - rx) * 0.12; ry += (my - ry) * 0.12;
+  ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+
+document.querySelectorAll('button, .ex-pill, input').forEach(el => {
+  el.addEventListener('mouseenter', () => { cur.classList.add('hover'); ring.classList.add('hover'); });
+  el.addEventListener('mouseleave', () => { cur.classList.remove('hover'); ring.classList.remove('hover'); });
+});
+
+// ── UTILS ──────────────────────────────────────
+function setUrl(u) { document.getElementById('url-input').value = u; }
+
+const LOADING_MSGS = [
+  'Scanning for noise…',
+  'Weighing visual entropy…',
+  'Consulting the Braun archive…',
+  'Measuring negative space…',
+  'Counting unnecessary elements…',
+  'Applying the 10 principles…',
+  'Less, but better…'
+];
+
+let loadingInterval;
+
+function showLoading() {
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('results').style.display = 'none';
+  let i = 0;
+  const numEl = document.getElementById('loading-num');
+  const msgEl = document.getElementById('loading-msg');
+  loadingInterval = setInterval(() => {
+    msgEl.textContent = LOADING_MSGS[i % LOADING_MSGS.length];
+    i++;
+    // Animate number
+    const n = Math.floor(Math.random() * 100);
+    numEl.textContent = String(n).padStart(2, '0');
+  }, 900);
+}
+
+function hideLoading() {
+  document.getElementById('loading').classList.remove('visible');
+  clearInterval(loadingInterval);
+}
+
+// ── MAIN ANALYSE ──────────────────────────────
+async function analyse() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById('analyse-btn');
+  btn.disabled = true; btn.textContent = 'Analysing…';
+
+  showLoading();
+
+  const prompt = `You are The Silence Meter — a brutally honest design critique tool inspired by Dieter Rams' philosophy "Less, but better."
+
+Analyse this website: ${url}
+
+You know this website from your training data. Based on what you know about its visual design, layout, information hierarchy, and user interface, score it against all 10 of Dieter Rams' principles.
+
+Respond ONLY with valid JSON, no markdown, no code fences:
+
+{
+  "site_name": "short display name of the site",
+  "silence_score": <integer 0-100, where 100 = perfectly silent/minimal like a Braun product, 0 = absolute visual chaos>,
+  "headline_verdict": "<6-10 word brutal honest verdict about this site's design>",
+  "summary": "<2-3 sentences. Be a sharp design critic. Reference specific UI decisions on this actual site.>",
+  "principles": [
+    {
+      "number": 1,
+      "name": "Good design is innovative",
+      "rams_quote": "<Rams' original words for this principle, 1 sentence>",
+      "score": <1-5>,
+      "verdict": "<1-2 sentences specific to THIS site. Be sharp and specific. Reference actual design choices.>",
+      "status": "fail|warn|pass"
+    }
+  ],
+  "redesign": {
+    "critique": "<3-4 sentences. Specific critique of their current hero section. Name actual elements that violate Rams.>",
+    "rams_approach": "<3-4 sentences. How Rams would redesign it. Be specific: typography choices, spacing philosophy, what elements to remove entirely, what to keep.>",
+    "hero_html": "<a complete self-contained HTML snippet for a redesigned hero section following Rams' principles exactly. Use only: clean typography (system serif or sans), generous white space, one clear hierarchy, no decorative elements, max 2 colours. Make it actually beautiful and minimal. Include inline styles. Make it at least 280px tall. This should look like an actual redesigned hero — with real headline text, a subline, and one CTA. Use the actual site's content/purpose.>"
+  }
+}
+
+All 10 principles must be included. Be genuinely critical — most commercial websites score poorly on Rams' principles. Don't be generous.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    hideLoading();
+    renderResults(parsed, url);
+
+  } catch(e) {
+    hideLoading();
+    document.getElementById('analyse-btn').disabled = false;
+    document.getElementById('analyse-btn').textContent = 'Analyse →';
+    alert('Something went wrong — check the URL and try again.');
+    console.error(e);
+  }
+
+  btn.disabled = false; btn.textContent = 'Analyse →';
+}
+
+// ── RENDER ──────────────────────────────────
+function renderResults(d, url) {
+  const score = d.silence_score || 50;
+  const scoreClass = score >= 70 ? 'good' : score >= 40 ? 'mid' : 'bad';
+  const noiseLevel = 100 - score; // noise is inverse of silence
+
+  // Score hero
+  const scoreEl = document.getElementById('score-num');
+  scoreEl.textContent = '—';
+  scoreEl.className = 'score-num';
+
+  document.getElementById('score-site').textContent = d.site_name || url;
+  document.getElementById('score-headline').textContent = d.headline_verdict || '';
+  document.getElementById('score-summary').textContent = d.summary || '';
+
+  // Noise bar
+  const fill = document.getElementById('noise-fill');
+  fill.className = 'noise-bar-fill ' + scoreClass;
+
+  // Show results
+  document.getElementById('results').style.display = 'block';
+  requestAnimationFrame(() => {
+    document.getElementById('results').classList.add('visible');
+  });
+
+  // Animate score counting up
+  let current = 0;
+  const target = score;
+  const duration = 1200;
+  const start = performance.now();
+  function countUp(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    current = Math.round(eased * target);
+    scoreEl.textContent = String(current).padStart(2, '0');
+    if (progress < 1) requestAnimationFrame(countUp);
+    else {
+      scoreEl.className = 'score-num ' + scoreClass;
+    }
+  }
+  requestAnimationFrame(countUp);
+
+  // Animate noise bar
+  setTimeout(() => {
+    fill.style.height = noiseLevel + '%';
+  }, 300);
+
+  // Build principles grid
+  const grid = document.getElementById('principles-grid');
+  grid.innerHTML = '';
+  let passCount = 0;
+
+  (d.principles || []).forEach((p, i) => {
+    if (p.status === 'pass') passCount++;
+
+    const card = document.createElement('div');
+    card.className = 'principle-card';
+
+    // Build pips (5 pips, filled based on score)
+    let pips = '';
+    for (let j = 1; j <= 5; j++) {
+      let cls = 'pip';
+      if (j <= p.score) {
+        cls += p.status === 'pass' ? ' fill-green' : p.status === 'warn' ? ' fill-amber' : ' fill-red';
+      }
+      pips += `<div class="${cls}"></div>`;
+    }
+
+    card.innerHTML = `
+      <div class="p-header">
+        <div class="p-num">${String(p.number).padStart(2,'0')}</div>
+        <div class="p-score-pip">${pips}</div>
+      </div>
+      <div class="p-name">${p.name}</div>
+      <div class="p-verdict">${p.verdict}</div>
+      <div class="p-ram-quote">"${p.rams_quote}"</div>
+      <div class="p-score-label ${p.status}">${p.status === 'pass' ? 'Passes' : p.status === 'warn' ? 'Borderline' : 'Fails'}</div>`;
+
+    grid.appendChild(card);
+
+    // Stagger animation
+    setTimeout(() => card.classList.add('show'), i * 80);
+  });
+
+  document.getElementById('pass-count').textContent = `${passCount} / 10 passing`;
+
+  // Redesign section
+  if (d.redesign) {
+    const out = document.getElementById('redesign-output');
+    out.innerHTML = '';
+
+    const fullText = `CRITIQUE\n${d.redesign.critique}\n\nRAMS APPROACH\n${d.redesign.rams_approach}`;
+
+    // Stream the text
+    let idx = 0;
+    out.classList.add('stream-cursor');
+    const streamInterval = setInterval(() => {
+      if (idx < fullText.length) {
+        out.textContent += fullText[idx];
+        idx++;
+      } else {
+        out.classList.remove('stream-cursor');
+        clearInterval(streamInterval);
+      }
+    }, 12);
+
+    // Render hero concept
+    if (d.redesign.hero_html) {
+      setTimeout(() => {
+        document.getElementById('hero-render').innerHTML = d.redesign.hero_html;
+      }, 800);
+    }
+  }
+
+  // Scroll to results
+  setTimeout(() => {
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 200);
+}
+
+// Enter key
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyse();
+});
+</script>
+</body>
+</html>
